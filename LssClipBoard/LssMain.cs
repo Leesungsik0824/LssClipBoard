@@ -502,7 +502,7 @@ namespace LssClipBoard
                         }                        
                     }
                     LssSend(packet);
-                }
+                } 
                 else if (Clipboard.ContainsText()) //클립보드에 텍스트가 있는지 확인
                 {
                     packet.MessageType = LssMessageType.Text;
