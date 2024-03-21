@@ -242,6 +242,7 @@
             // 
             this.LssLog.Location = new System.Drawing.Point(12, 229);
             this.LssLog.Name = "LssLog";
+            this.LssLog.ReadOnly = true;
             this.LssLog.Size = new System.Drawing.Size(410, 316);
             this.LssLog.TabIndex = 9;
             this.LssLog.Text = "";
