@@ -4,7 +4,6 @@ using System.Net;
 using System.Windows.Forms;
 using System.Threading.Tasks;
 using System.Text;
-using Newtonsoft.Json;
 using System.IO;
 using System.Drawing;
 using System.Threading;
@@ -15,10 +14,11 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections.Specialized;
 using static LssClipBoard.LssPacket;
 using System.Runtime.CompilerServices;
+using System.Runtime.Serialization;
 
 namespace LssClipBoard
 {
-    public partial class LssMain : Form
+    public partial class LssMain : Form , IDisposable
     {
         //ini파일쓰기
         [DllImport("kernel32")]
@@ -100,6 +100,28 @@ namespace LssClipBoard
             }
         }
 
+        // 객체를 Base64 문자열로 인코딩
+        public string SerializeObject<T>(T obj)
+        {
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                IFormatter formatter = new BinaryFormatter();
+                formatter.Serialize(memoryStream, obj);
+                return Convert.ToBase64String(memoryStream.ToArray());
+            }
+        }
+
+        // Base64 문자열을 객체로 디코딩하는 메서드
+        public T DeserializeObject<T>(string base64String)
+        {
+            byte[] bytes = Convert.FromBase64String(base64String);
+            using (MemoryStream memoryStream = new MemoryStream(bytes))
+            {
+                IFormatter formatter = new BinaryFormatter();
+                return (T)formatter.Deserialize(memoryStream);
+            }
+        }
+
         public string GetIPAddress()
         {
             IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
@@ -166,35 +188,12 @@ namespace LssClipBoard
                     int bytesRead;
                     StringBuilder data = new StringBuilder();
 
-                    //this.Invoke(new Action(delegate ()
-                    //{
-                    //    Form lp = new Form()
-                    //    {
-                    //        FormBorderStyle = FormBorderStyle.None,
-                    //        MinimizeBox = false,
-                    //        MaximizeBox = false,
-                    //        StartPosition = FormStartPosition.CenterScreen,
-                    //        Name = "LssFileLoading",
-                    //        Text = "데이터수신중",
-                    //        Size = new System.Drawing.Size(200, 50)
-                    //    };
-                    //    ProgressBar progressbar = new ProgressBar()
-                    //    {
-                    //        Minimum = 0,
-                    //        Maximum = 100,
-                    //        Style = ProgressBarStyle.Marquee,
-                    //        Dock = DockStyle.Fill
-                    //    };
-                    //    lp.Controls.Add(progressbar);
-                    //    lp.Show();
-                    //}));
-
                     while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0){
                         data.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
                     }
                     //string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     //ConsoleLog("수신데이터 : " + data);
-                    LssPacket lssPacket = JsonConvert.DeserializeObject<LssPacket>(data.ToString());
+                    LssPacket lssPacket = DeserializeObject<LssPacket>(data.ToString());
 
                     ConsoleLog("[서버]수신데이터타입 : " + lssPacket.MessageType.ToString());
                     if (lssPacket.MessageType == LssMessageType.File)
@@ -230,23 +229,6 @@ namespace LssClipBoard
                     }
                     ConsoleLog("[서버]수신완료");
                     client.Close();
-
-                    //로딩창 닫기
-                    //this.Invoke(new Action(delegate ()
-                    //{
-                    //    FormCollection fc = Application.OpenForms;
-
-                    //    foreach (Form frm in fc)
-                    //    {
-                    //        //실행중인폼
-                    //        if (frm.Name.Equals("LssFileLoading"))
-                    //        {
-                    //            frm.Close();
-                    //            frm.Dispose();
-                    //            break;
-                    //        }
-                    //    }
-                    //}));
                 }
                 catch (Exception ex)
                 {
@@ -285,6 +267,8 @@ namespace LssClipBoard
                         }
                         else if (lssPacket.MessageType == LssMessageType.File) //파일
                         {
+                            LssToolTip("클립보드 파일 수신중", "클립보드 파일 수신이 시작되었습니다.");
+
                             //바탕화면에 컴퓨터 이름이 기본값
                             string SaveDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "\\" + SystemInformation.ComputerName;
 
@@ -329,6 +313,9 @@ namespace LssClipBoard
 
                             Clipboard.Clear();
                             Clipboard.SetDataObject(data, true);
+
+                            //알림창 띄우기
+                            LssToolTip("클립보드 수신완료", "클립보드 수신이 완료되었습니다.");
                         }
                     }
 
@@ -358,7 +345,7 @@ namespace LssClipBoard
                     ConsoleLog("[송신]전송시작");
                     NetworkStream stream;
                     //ConsoleLog("[송신]전송준비2");
-                    GlobalSendMsg = JsonConvert.SerializeObject(packet);
+                    GlobalSendMsg = SerializeObject(packet);
                     //ConsoleLog("[송신]전송준비3");
                     byte[] data = Encoding.UTF8.GetBytes(GlobalSendMsg);
                     try
@@ -519,8 +506,8 @@ namespace LssClipBoard
                         //    packet.MessageFilesData.Add(files);
                         //}
                         FileInfo file = new FileInfo(FileInfo);
-                        //82657192
-                        if (file.Length > 83000000)
+                        //156229224
+                        if (file.Length > 157000000)
                         {
                             MessageBox.Show("용량이 너무 큽니다.");
                         }
@@ -676,6 +663,7 @@ namespace LssClipBoard
             else
             {
                 레지스터해제();
+                this.Dispose();
             }
         }
 
@@ -690,7 +678,7 @@ namespace LssClipBoard
 
         private void notifyIcon1_DoubleClick(object sender, EventArgs e)
         {
-            notifyIcon1.Visible = false;
+            notifyIcon1.Visible = true;
             this.Show(); // 폼 보이기
             this.WindowState = FormWindowState.Normal; // 최소화 해제
         }
@@ -787,8 +775,19 @@ namespace LssClipBoard
 
             LssSendInit(MyIPAddr, this.개발_PC_IP.Text);
         }
-    }
 
+        private void LssToolTip(string Title , string Message)
+        {
+            //알림창 띄우기
+            //this.Invoke(new Action(delegate ()
+            //{
+                //notifyIcon1.BalloonTipTitle = Title;
+                //notifyIcon1.BalloonTipText = Message;
+                notifyIcon1.ShowBalloonTip(3000 , Title , Message , ToolTipIcon.Info);
+            //}));
+        }
+    }
+    [Serializable]
     //전송데이터 패킷
     public class LssPacket
     {
@@ -798,6 +797,7 @@ namespace LssClipBoard
         public string MessageData { get; set; } //메세지내용
         public List<MessageFiles> MessageFilesData { get; set; } //파일데이터(여러개 가능)
 
+        [Serializable]
         public class MessageFiles
         {
             public string FileName { get; set; }
