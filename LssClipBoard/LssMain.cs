@@ -745,7 +745,7 @@ namespace LssClipBoard
         {
             OpenFileDialog openFileDialog = new OpenFileDialog()
             {
-                Multiselect = true
+                Multiselect = false
             };
 
             if (DialogResult.OK == openFileDialog.ShowDialog())
