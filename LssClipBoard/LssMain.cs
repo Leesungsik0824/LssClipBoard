@@ -13,7 +13,6 @@ using System.Runtime.InteropServices;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections.Specialized;
 using static LssClipBoard.LssPacket;
-using System.Runtime.CompilerServices;
 using System.Runtime.Serialization;
 
 namespace LssClipBoard
@@ -191,8 +190,7 @@ namespace LssClipBoard
                     while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0){
                         data.Append(Encoding.UTF8.GetString(buffer, 0, bytesRead));
                     }
-                    //string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    //ConsoleLog("수신데이터 : " + data);
+                    //수신 받은 데이터를 역직렬화 시켜줌.
                     LssPacket lssPacket = DeserializeObject<LssPacket>(data.ToString());
 
                     ConsoleLog("[서버]수신데이터타입 : " + lssPacket.MessageType.ToString());
@@ -251,14 +249,14 @@ namespace LssClipBoard
                     {
                         if (lssPacket.MessageType == LssMessageType.Text) //텍스트
                         {
-                            Clipboard.SetText(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(lssPacket.MessageData)));
+                            //데이터가 byte 타입으로 전송됨.
+                            Clipboard.SetText(Encoding.Default.GetString(lssPacket.MessageData));
                         }
                         else if (lssPacket.MessageType == LssMessageType.Image) //이미지
                         {
-                            // Base64 문자열을 바이트 배열로 디코딩
-                            byte[] bytes = Convert.FromBase64String(lssPacket.MessageData);
+                            byte[] bytes = lssPacket.MessageData;
 
-                            // 디코딩된 바이트 배열로부터 이미지 생성
+                            // 바이트 배열로부터 이미지 생성
                             using (MemoryStream memoryStream = new MemoryStream(bytes))
                             {
                                 Image image = Image.FromStream(memoryStream);
@@ -280,29 +278,24 @@ namespace LssClipBoard
                             }
                             
                             StringCollection filePaths = new StringCollection();
-                            //progressBar.Step =  Convert.ToInt32(Math.Ceiling(Convert.ToDouble(100/lssPacket.MessageFilesData.Count)));
-
+                            
                             foreach (var FileData in lssPacket.MessageFilesData)
                             {
-                                // Base64 문자열을 바이트 배열로 디코딩
-                                byte[] bytes = Convert.FromBase64String(FileData.FileContents);
+                                // 파일데이터 byte
+                                byte[] bytes = FileData.FileContents;
 
                                 string SaveFileName = SaveDirectory + "\\" + FileData.FileName;
 
-                                //File.WriteAllBytes(SaveFileName, bytes);
-
+                                //파일 만들기
                                 using (var stream = new FileStream(SaveFileName, FileMode.Create, FileAccess.Write))
                                 {
                                     stream.Write(bytes, 0, bytes.Length);
                                 }
 
-                                //File.SetAttributes(SaveFileName, File.GetAttributes(SaveFileName) | FileAttributes.Hidden);
-
                                 filePaths.Add(SaveFileName);
                             }
-                            //progressBar.Value = progressBar.Maximum;
-
-                            //Clipboard.SetFileDropList(filePaths);
+                            
+                            //파일 잘라내기 효과를 위함.
                             byte[] MoveEffect = new byte[] { 2, 0, 0, 0 }; //무브효과
                             MemoryStream DropEffect = new MemoryStream();
                             DropEffect.Write(MoveEffect, 0, MoveEffect.Length);
@@ -495,18 +488,9 @@ namespace LssClipBoard
 
                     foreach (var FileInfo in FileList)
                     {
-                        //using (MemoryStream memoryStream = new MemoryStream())
-                        //{
-                        //    MessageFiles files = new MessageFiles();
-                        //    BinaryFormatter binaryFormatter = new BinaryFormatter();
-                        //    byte[] numArray = File.ReadAllBytes(FileInfo);
-                        //    files.FileContents = Convert.ToBase64String(numArray);
-                        //    FileInfo file = new FileInfo(FileInfo);
-                        //    files.FileName = file.Name;
-                        //    packet.MessageFilesData.Add(files);
-                        //}
+                        //파일 정보
                         FileInfo file = new FileInfo(FileInfo);
-                        //156229224
+                        //156229224(직렬화 구조로 설계를 하다 보니 , serialize 시에 out of memory 에러가 발생해서 어쩔수 없이 용량제한 걸어둠.)
                         if (file.Length > 157000000)
                         {
                             MessageBox.Show("용량이 너무 큽니다.");
@@ -519,7 +503,7 @@ namespace LssClipBoard
                                 MessageFiles files = new MessageFiles();
                                 stream.Read(binary, 0, binary.Length);
                                 files.FileName = file.Name;
-                                files.FileContents = Convert.ToBase64String(binary);
+                                files.FileContents = binary;
                                 packet.MessageFilesData.Add(files);
                             }
                             LssSend(packet);
@@ -529,7 +513,7 @@ namespace LssClipBoard
                 else if (Clipboard.ContainsText()) //클립보드에 텍스트가 있는지 확인
                 {
                     packet.MessageType = LssMessageType.Text;
-                    packet.MessageData = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(Clipboard.GetText()));
+                    packet.MessageData = Encoding.UTF8.GetBytes(Clipboard.GetText());
                     LssSend(packet);
                 }
                 else if (Clipboard.ContainsImage()) //클립보드에 이미지가 있는지 확인
@@ -541,7 +525,7 @@ namespace LssClipBoard
 
                         image.Save(memoryStream, ImageFormat.Jpeg);
                         byte[] imageBytes = memoryStream.ToArray();
-                        packet.MessageData = Convert.ToBase64String(imageBytes);
+                        packet.MessageData = imageBytes;
                         LssSend(packet);
                     }
                 }
@@ -778,13 +762,7 @@ namespace LssClipBoard
 
         private void LssToolTip(string Title , string Message)
         {
-            //알림창 띄우기
-            //this.Invoke(new Action(delegate ()
-            //{
-                //notifyIcon1.BalloonTipTitle = Title;
-                //notifyIcon1.BalloonTipText = Message;
-                notifyIcon1.ShowBalloonTip(3000 , Title , Message , ToolTipIcon.Info);
-            //}));
+            notifyIcon1.ShowBalloonTip(3000 , Title , Message , ToolTipIcon.Info);            
         }
     }
     [Serializable]
@@ -794,14 +772,14 @@ namespace LssClipBoard
         public string MessageAddress { get; set; } //배달주소
         public string MessageAddList { get; set; } //배달주소리스트
         public LssMessageType MessageType { get; set; } //메시지타입
-        public string MessageData { get; set; } //메세지내용
+        public byte[] MessageData { get; set; } //메세지내용
         public List<MessageFiles> MessageFilesData { get; set; } //파일데이터(여러개 가능)
 
         [Serializable]
         public class MessageFiles
         {
             public string FileName { get; set; }
-            public string FileContents { get; set; }
+            public byte[] FileContents { get; set; }
         }
     }
 
